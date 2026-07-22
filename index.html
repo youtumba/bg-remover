@@ -113,13 +113,33 @@ footer a:hover{text-decoration:underline}
 // уже вшиты/переписаны в абсолютные URL. «Сырой» dist/index.mjs в браузере не работает:
 // падает с ошибкой «Failed to resolve module specifier "lodash"».
 // Несколько CDN-зеркал: если одно недоступно или медленное у провайдера — берём следующее.
+// Четыре зеркала: у разных провайдеров доступны разные CDN (например, cdn.jsdelivr.net
+// может обрываться с ERR_EMPTY_RESPONSE, а fastly/gcore-зеркала того же jsdelivr работают).
 const LIB_URLS = [
   'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm',
+  'https://fastly.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm',
+  'https://gcore.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm',
   'https://esm.sh/@imgly/background-removal@1.4.5'
 ];
-// Файлы модели и движка качаем явно из официального data-пакета на jsdelivr,
-// чтобы пути не зависели от того, с какого зеркала загрузилась библиотека.
-const ASSETS_URL = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.4.5/dist/';
+// Зеркала для файлов модели и движка (официальный data-пакет).
+// Перед обработкой пробуем каждое и берём первое отвечающее.
+const ASSETS_URLS = [
+  'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.4.5/dist/',
+  'https://fastly.jsdelivr.net/npm/@imgly/background-removal-data@1.4.5/dist/',
+  'https://gcore.jsdelivr.net/npm/@imgly/background-removal-data@1.4.5/dist/',
+  'https://unpkg.com/@imgly/background-removal-data@1.4.5/dist/'
+];
+let assetsUrl = null; // выбранное рабочее зеркало (запоминаем на сессию)
+async function pickAssetsUrl() {
+  if (assetsUrl) return assetsUrl;
+  for (const base of ASSETS_URLS) {
+    try {
+      const r = await fetch(base + 'resources.json', { cache: 'force-cache' });
+      if (r.ok) { assetsUrl = base; return base; }
+    } catch (_) { /* зеркало недоступно — пробуем следующее */ }
+  }
+  throw new Error('Ни одно CDN-зеркало с файлами модели не отвечает. Похоже, проблема с интернетом или провайдер блокирует CDN — попробуй позже или с другой сети.');
+}
 const MAX_SIZE = 30 * 1024 * 1024; // 30 МБ
 
 const dz = document.getElementById('dz'), fi = document.getElementById('fi');
@@ -228,6 +248,8 @@ async function process(file) {
       }
       if (!removeBg) throw lastErr || new Error('Не удалось загрузить библиотеку ни с одного CDN');
     }
+    progress('Поиск рабочего CDN…', 12);
+    const publicPath = await pickAssetsUrl();
     progress('Анализ…', 18); setStep(1);
     const result = await removeBg(file, {
       // Модель из выпадающего списка. В @imgly/background-removal@1.4.5
@@ -235,7 +257,7 @@ async function process(file) {
       // small — лёгкая и быстрая, medium — точнее, но тяжелее.
       // Каждая модель скачивается один раз и кэшируется браузером.
       model: ms.value,
-      publicPath: ASSETS_URL,
+      publicPath,
       progress(key, current, total) {
         if (!total) return;
         const labels = {
