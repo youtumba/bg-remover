@@ -74,8 +74,8 @@ footer a:hover{text-decoration:underline}
 <div class="opts">
 <label for="ms">🧠 Модель:</label>
 <select id="ms" aria-label="Выбор модели нейросети">
-<option value="isnet_fp16">⚡ Лёгкая — ~20 МБ, быстрая загрузка</option>
-<option value="isnet">💎 Нормальная — ~40 МБ, максимальное качество</option>
+<option value="small">⚡ Лёгкая — быстрая загрузка (~10–20 МБ)</option>
+<option value="medium">💎 Нормальная — максимальное качество (~40+ МБ)</option>
 </select>
 </div>
 <div id="dz">
@@ -127,7 +127,7 @@ const ms = document.getElementById('ms');
 // Запоминаем выбор модели между визитами
 try {
   const savedModel = localStorage.getItem('bg-model');
-  if (savedModel === 'isnet' || savedModel === 'isnet_fp16') ms.value = savedModel;
+  if (savedModel === 'small' || savedModel === 'medium') ms.value = savedModel;
 } catch (_) {}
 ms.addEventListener('change', () => {
   try { localStorage.setItem('bg-model', ms.value); } catch (_) {}
@@ -230,8 +230,9 @@ async function process(file) {
     }
     progress('Анализ…', 18); setStep(1);
     const result = await removeBg(file, {
-      // Модель из выпадающего списка:
-      // isnet_fp16 — лёгкая (~20 МБ), isnet — нормальная (~40 МБ, чуть лучше качество).
+      // Модель из выпадающего списка. В @imgly/background-removal@1.4.5
+      // допустимые значения строго 'small' | 'medium' (проверяется zod-схемой).
+      // small — лёгкая и быстрая, medium — точнее, но тяжелее.
       // Каждая модель скачивается один раз и кэшируется браузером.
       model: ms.value,
       publicPath: ASSETS_URL,
