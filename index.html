@@ -109,13 +109,17 @@ footer a:hover{text-decoration:underline}
 </main>
 <footer>Фото никуда не уходят — всё локально 🔒<br/>Powered by <a href="https://github.com/imgly/background-removal-js" target="_blank" rel="noopener">@imgly/background-removal</a></footer>
 <script type="module">
-// ВАЖНО: у @imgly/background-removal@1.4.5 entry-файл — dist/index.mjs
+// ВАЖНО: берём СБОРНЫЕ ESM-версии (+esm / esm.sh), в них зависимости (lodash и пр.)
+// уже вшиты/переписаны в абсолютные URL. «Сырой» dist/index.mjs в браузере не работает:
+// падает с ошибкой «Failed to resolve module specifier "lodash"».
 // Несколько CDN-зеркал: если одно недоступно или медленное у провайдера — берём следующее.
-// Модель качается с того же CDN, с которого загрузилась библиотека.
 const LIB_URLS = [
-  'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/index.mjs',
-  'https://unpkg.com/@imgly/background-removal@1.4.5/dist/index.mjs'
+  'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm',
+  'https://esm.sh/@imgly/background-removal@1.4.5'
 ];
+// Файлы модели и движка качаем явно из официального data-пакета на jsdelivr,
+// чтобы пути не зависели от того, с какого зеркала загрузилась библиотека.
+const ASSETS_URL = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.4.5/dist/';
 const MAX_SIZE = 30 * 1024 * 1024; // 30 МБ
 
 const dz = document.getElementById('dz'), fi = document.getElementById('fi');
@@ -230,6 +234,7 @@ async function process(file) {
       // isnet_fp16 — лёгкая (~20 МБ), isnet — нормальная (~40 МБ, чуть лучше качество).
       // Каждая модель скачивается один раз и кэшируется браузером.
       model: ms.value,
+      publicPath: ASSETS_URL,
       progress(key, current, total) {
         if (!total) return;
         const labels = {
