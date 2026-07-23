@@ -74,8 +74,8 @@ footer a:hover{text-decoration:underline}
 <div class="opts">
 <label for="ms">🧠 Модель:</label>
 <select id="ms" aria-label="Выбор модели нейросети">
-<option value="small">⚡ Лёгкая — быстрая загрузка (~10–20 МБ)</option>
-<option value="medium">💎 Нормальная — максимальное качество (~40+ МБ)</option>
+<option value="small">⚡ Лёгкая — быстрая загрузка (~42 МБ)</option>
+<option value="medium">💎 Нормальная — максимальное качество (~84 МБ)</option>
 </select>
 </div>
 <div id="dz">
@@ -121,12 +121,13 @@ const LIB_URLS = [
   'https://gcore.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm',
   'https://esm.sh/@imgly/background-removal@1.4.5'
 ];
-// Зеркала для файлов модели и движка (официальный data-пакет).
+// Зеркала для файлов модели и движка.
+// ВАЖНО: jsdelivr ЗДЕСЬ НЕ ГОДИТСЯ — data-пакет весит >150 МБ, это больше лимита
+// jsdelivr, и он отвечает 403 на ЛЮБОЙ файл пакета. Основной источник —
+// официальный CDN разработчиков библиотеки (staticimgly.com), запасной — unpkg.
 // Перед обработкой пробуем каждое и берём первое отвечающее.
 const ASSETS_URLS = [
-  'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.4.5/dist/',
-  'https://fastly.jsdelivr.net/npm/@imgly/background-removal-data@1.4.5/dist/',
-  'https://gcore.jsdelivr.net/npm/@imgly/background-removal-data@1.4.5/dist/',
+  'https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/',
   'https://unpkg.com/@imgly/background-removal-data@1.4.5/dist/'
 ];
 let assetsUrl = null; // выбранное рабочее зеркало (запоминаем на сессию)
@@ -173,7 +174,7 @@ dz.addEventListener('drop', e => {
   e.preventDefault(); dragDepth = 0; dz.classList.remove('ov');
   handleFile(e.dataTransfer.files[0]);
 });
-// Чтобы случайный дроп мимо зоны не открывал файл вместо с��раницы
+// Чтобы случайный дроп мимо зоны не открывал файл вместо страницы
 window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => e.preventDefault());
 
@@ -274,7 +275,7 @@ async function process(file) {
     setTimeout(() => { pw.style.display = 'none'; rw.style.display = 'block'; }, 450);
   } catch (e) {
     pw.style.display = 'none'; dz.style.display = 'block';
-    showError('Ошибка: ' + (e?.message || e) + '\n\nПри первом запуске нужен интернет — модель ~20 МБ скачивается один раз и кэшируется браузером.');
+    showError('Ошибка: ' + (e?.message || e) + '\n\nПри первом запуске нужен интернет — модель (42–84 МБ) скачивается один раз и кэшируется браузером.');
   } finally {
     busy = false;
     ms.disabled = false;
