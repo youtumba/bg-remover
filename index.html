@@ -74,8 +74,9 @@ footer a:hover{text-decoration:underline}
 <div class="opts">
 <label for="ms">🧠 Модель:</label>
 <select id="ms" aria-label="Выбор модели нейросети">
-<option value="small">⚡ Лёгкая — быстрая загрузка (~42 МБ)</option>
-<option value="medium">💎 Нормальная — максимальное качество (~84 МБ)</option>
+<option value="isnet_quint8">⚡ Лёгкая — быстрая загрузка (~42 МБ)</option>
+<option value="isnet_fp16">💎 Средняя — баланс скорости и качества (~84 МБ)</option>
+<option value="isnet" selected>🧠 Умная — максимальное качество (~170 МБ)</option>
 </select>
 </div>
 <div id="dz">
@@ -116,10 +117,10 @@ footer a:hover{text-decoration:underline}
 // Четыре зеркала: у разных провайдеров доступны разные CDN (например, cdn.jsdelivr.net
 // может обрываться с ERR_EMPTY_RESPONSE, а fastly/gcore-зеркала того же jsdelivr работают).
 const LIB_URLS = [
-  'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm',
-  'https://fastly.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm',
-  'https://gcore.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm',
-  'https://esm.sh/@imgly/background-removal@1.4.5'
+  'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.8/+esm',
+  'https://fastly.jsdelivr.net/npm/@imgly/background-removal@1.5.8/+esm',
+  'https://gcore.jsdelivr.net/npm/@imgly/background-removal@1.5.8/+esm',
+  'https://esm.sh/@imgly/background-removal@1.5.8'
 ];
 // Зеркала для файлов модели и движка.
 // ВАЖНО: jsdelivr ЗДЕСЬ НЕ ГОДИТСЯ — data-пакет весит >150 МБ, это больше лимита
@@ -127,8 +128,8 @@ const LIB_URLS = [
 // официальный CDN разработчиков библиотеки (staticimgly.com), запасной — unpkg.
 // Перед обработкой пробуем каждое и берём первое отвечающее.
 const ASSETS_URLS = [
-  'https://staticimgly.com/@imgly/background-removal-data/1.4.5/dist/',
-  'https://unpkg.com/@imgly/background-removal-data@1.4.5/dist/'
+  'https://staticimgly.com/@imgly/background-removal-data/1.5.8/dist/',
+  'https://unpkg.com/@imgly/background-removal-data@1.5.8/dist/'
 ];
 let assetsUrl = null; // выбранное рабочее зеркало (запоминаем на сессию)
 async function pickAssetsUrl() {
@@ -148,7 +149,8 @@ const ms = document.getElementById('ms');
 // Запоминаем выбор модели между визитами
 try {
   const savedModel = localStorage.getItem('bg-model');
-  if (savedModel === 'small' || savedModel === 'medium') ms.value = savedModel;
+  // Старые значения 'small'/'medium' игнорируем: после апгрейда по умолчанию — умная модель
+  if (savedModel === 'isnet' || savedModel === 'isnet_fp16' || savedModel === 'isnet_quint8') ms.value = savedModel;
 } catch (_) {}
 ms.addEventListener('change', () => {
   try { localStorage.setItem('bg-model', ms.value); } catch (_) {}
@@ -243,6 +245,7 @@ async function process(file) {
       for (const url of LIB_URLS) {
         try {
           const mod = await import(url);
+          if (typeof mod.removeBackground !== 'function') throw new Error('битая сборка CDN');
           removeBg = mod.removeBackground;
           break;
         } catch (e) { lastErr = e; }
@@ -253,20 +256,21 @@ async function process(file) {
     const publicPath = await pickAssetsUrl();
     progress('Анализ…', 18); setStep(1);
     const result = await removeBg(file, {
-      // Модель из выпадающего списка. В @imgly/background-removal@1.4.5
-      // допустимые значения строго 'small' | 'medium' (проверяется zod-схемой).
-      // small — лёгкая и быстрая, medium — точнее, но тяжелее.
+      // Модель из выпадающего списка. В @imgly/background-removal@1.5.8
+      // допустимые значения 'isnet' | 'isnet_fp16' | 'isnet_quint8'.
+      // isnet — полная модель, максимум качества; fp16 — средняя; quint8 — лёгкая.
       // Каждая модель скачивается один раз и кэшируется браузером.
       model: ms.value,
+      // Если браузер умеет WebGPU — обработка идёт на видеокарте (заметно быстрее)
+      device: (navigator.gpu ? 'gpu' : 'cpu'),
       publicPath,
       progress(key, current, total) {
         if (!total) return;
-        const labels = {
-          'fetch:model': 'Загрузка модели…',
-          'fetch:ort-wasm': 'Загрузка движка…',
-          'compute:inference': 'Нейросетевая обработка…'
-        };
-        progress(labels[key] || 'Обработка…', Math.min(95, Math.round(18 + current / total * 75)));
+        // В 1.5.x ключи вида 'fetch:/models/isnet', 'fetch:/onnxruntime-web/…', 'compute:inference'
+        let label = 'Обработка…';
+        if (String(key).startsWith('fetch')) label = String(key).includes('model') ? 'Загрузка модели…' : 'Загрузка движка…';
+        else if (String(key).startsWith('compute')) label = 'Нейросетевая обработка…';
+        progress(label, Math.min(95, Math.round(18 + current / total * 75)));
       }
     });
     resultBlob = result;
@@ -275,7 +279,7 @@ async function process(file) {
     setTimeout(() => { pw.style.display = 'none'; rw.style.display = 'block'; }, 450);
   } catch (e) {
     pw.style.display = 'none'; dz.style.display = 'block';
-    showError('Ошибка: ' + (e?.message || e) + '\n\nПри первом запуске нужен интернет — модель (42–84 МБ) скачивается один раз и кэшируется браузером.');
+    showError('Ошибка: ' + (e?.message || e) + '\n\nПри первом запуске нужен интернет — модель (42–170 МБ) скачивается один раз и кэшируется браузером.');
   } finally {
     busy = false;
     ms.disabled = false;
