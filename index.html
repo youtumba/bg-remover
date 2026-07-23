@@ -76,7 +76,8 @@ footer a:hover{text-decoration:underline}
 <select id="ms" aria-label="Выбор модели нейросети">
 <option value="isnet_quint8">⚡ Лёгкая — быстрая загрузка (~42 МБ)</option>
 <option value="isnet_fp16">💎 Средняя — баланс скорости и качества (~84 МБ)</option>
-<option value="isnet" selected>🧠 Умная — максимальное качество (~170 МБ)</option>
+<option value="isnet">🧠 Умная — максимальное качество (~170 МБ)</option>
+<option value="rmbg" selected>🎮 RMBG — рендеры, персонажи игр, арты (~44 МБ)</option>
 </select>
 </div>
 <div id="dz">
@@ -108,7 +109,7 @@ footer a:hover{text-decoration:underline}
 </div>
 </div>
 </main>
-<footer>Фото никуда не уходят — всё локально 🔒<br/>Powered by <a href="https://github.com/imgly/background-removal-js" target="_blank" rel="noopener">@imgly/background-removal</a></footer>
+<footer>Фото никуда не уходят — всё локально 🔒<br/>Powered by <a href="https://github.com/imgly/background-removal-js" target="_blank" rel="noopener">@imgly/background-removal</a> · <a href="https://huggingface.co/briaai/RMBG-1.4" target="_blank" rel="noopener">RMBG-1.4</a></footer>
 <script type="module">
 // ВАЖНО: берём СБОРНЫЕ ESM-версии (+esm / esm.sh), в них зависимости (lodash и пр.)
 // уже вшиты/переписаны в абсолютные URL. «Сырой» dist/index.mjs в браузере не работает:
@@ -142,6 +143,76 @@ async function pickAssetsUrl() {
   }
   throw new Error('Ни одно CDN-зеркало с файлами модели не отвечает. Похоже, проблема с интернетом или провайдер блокирует CDN — попробуй позже или с другой сети.');
 }
+// --- Вторая нейросеть: RMBG-1.4 (BRIA) через Transformers.js ---
+// isnet обучена на фотографиях и плохо справляется с рендерами, аниме и игровой
+// графикой. RMBG-1.4 заметно лучше режет персонажей игр, арты и сложные края.
+// Библиотека грузится с CDN-зеркал (как и основная), сама модель (~44 МБ) —
+// с huggingface.co; скачивается один раз и кэшируется браузером.
+const TJS_URLS = [
+  'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2',
+  'https://fastly.jsdelivr.net/npm/@xenova/transformers@2.17.2',
+  'https://gcore.jsdelivr.net/npm/@xenova/transformers@2.17.2',
+  'https://esm.sh/@xenova/transformers@2.17.2'
+];
+let rmbg = null; // { RawImage, model, processor } — кэш на сессию
+async function loadRmbg(onProgress) {
+  if (rmbg) return rmbg;
+  let tjs = null, tjsBase = null, lastErr = null;
+  for (const url of TJS_URLS) {
+    try {
+      const mod = await import(url);
+      if (!mod.AutoModel || !mod.AutoProcessor || !mod.RawImage) throw new Error('битая сборка CDN');
+      tjs = mod; tjsBase = url;
+      break;
+    } catch (e) { lastErr = e; }
+  }
+  if (!tjs) throw lastErr || new Error('Не удалось загрузить Transformers.js ни с одного CDN');
+  tjs.env.allowLocalModels = false;
+  // WASM-движок ONNX берём с того же зеркала, что и саму библиотеку
+  if (tjsBase.includes('jsdelivr')) tjs.env.backends.onnx.wasm.wasmPaths = tjsBase + '/dist/';
+  const progress_callback = d => {
+    if (d && d.status === 'progress' && String(d.file || '').endsWith('.onnx')) onProgress(d.progress || 0);
+  };
+  const model = await tjs.AutoModel.from_pretrained('briaai/RMBG-1.4', {
+    config: { model_type: 'custom' },
+    progress_callback
+  });
+  const processor = await tjs.AutoProcessor.from_pretrained('briaai/RMBG-1.4', {
+    config: {
+      do_normalize: true, do_pad: false, do_rescale: true, do_resize: true,
+      feature_extractor_type: 'ImageFeatureExtractor',
+      image_mean: [0.5, 0.5, 0.5], image_std: [1, 1, 1],
+      resample: 2, rescale_factor: 0.00392156862745098,
+      size: { width: 1024, height: 1024 }
+    }
+  });
+  rmbg = { RawImage: tjs.RawImage, model, processor };
+  return rmbg;
+}
+async function runRmbg(file) {
+  progress('Загрузка модели RMBG…', 6);
+  const { RawImage, model, processor } = await loadRmbg(p => progress('Загрузка модели RMBG…', Math.min(60, Math.round(6 + p * 0.54))));
+  progress('Нейросетевая обработка…', 65); setStep(1);
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await RawImage.fromURL(url);
+    const { pixel_values } = await processor(image);
+    const { output } = await model({ input: pixel_values });
+    // Маска 0–255 растягивается до размера оригинала и пишется в альфа-канал
+    const mask = await RawImage.fromTensor(output[0].mul(255).to('uint8')).resize(image.width, image.height);
+    progress('Собираю результат…', 92);
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width; canvas.height = image.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image.toCanvas(), 0, 0);
+    const px = ctx.getImageData(0, 0, image.width, image.height);
+    for (let i = 0; i < mask.data.length; ++i) px.data[4 * i + 3] = mask.data[i];
+    ctx.putImageData(px, 0, 0);
+    return await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('не удалось собрать PNG')), 'image/png'));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 const MAX_SIZE = 30 * 1024 * 1024; // 30 МБ
 
 const dz = document.getElementById('dz'), fi = document.getElementById('fi');
@@ -149,8 +220,8 @@ const ms = document.getElementById('ms');
 // Запоминаем выбор модели между визитами
 try {
   const savedModel = localStorage.getItem('bg-model');
-  // Старые значения 'small'/'medium' игнорируем: после апгрейда по умолчанию — умная модель
-  if (savedModel === 'isnet' || savedModel === 'isnet_fp16' || savedModel === 'isnet_quint8') ms.value = savedModel;
+  // Старые значения 'small'/'medium' игнорируем: по умолчанию — RMBG (лучше всего для рендеров и артов)
+  if (savedModel === 'rmbg' || savedModel === 'isnet' || savedModel === 'isnet_fp16' || savedModel === 'isnet_quint8') ms.value = savedModel;
 } catch (_) {}
 ms.addEventListener('change', () => {
   try { localStorage.setItem('bg-model', ms.value); } catch (_) {}
@@ -240,6 +311,11 @@ async function process(file) {
   setImage(oi, file);
   setStep(0); progress('Загрузка ИИ-модели…', 4);
   try {
+    let result;
+    if (ms.value === 'rmbg') {
+      // Движок RMBG — отдельная ветка, imgly-библиотека для него не нужна
+      result = await runRmbg(file);
+    } else {
     if (!removeBg) {
       let lastErr = null;
       for (const url of LIB_URLS) {
@@ -255,7 +331,7 @@ async function process(file) {
     progress('Поиск рабочего CDN…', 12);
     const publicPath = await pickAssetsUrl();
     progress('Анализ…', 18); setStep(1);
-    const result = await removeBg(file, {
+    result = await removeBg(file, {
       // Модель из выпадающего списка. В @imgly/background-removal@1.5.8
       // допустимые значения 'isnet' | 'isnet_fp16' | 'isnet_quint8'.
       // isnet — полная модель, максимум качества; fp16 — средняя; quint8 — лёгкая.
@@ -273,6 +349,7 @@ async function process(file) {
         progress(label, Math.min(95, Math.round(18 + current / total * 75)));
       }
     });
+    }
     resultBlob = result;
     setImage(ri, result);
     progress('Готово!', 100); setStep(2);
