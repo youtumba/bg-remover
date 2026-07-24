@@ -1,1 +1,674 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>BG Remover — background removal &amp; image upscaling</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0d12;--s:#12151d;--s2:#171b25;--s3:#1f2430;--b:#262c3a;--b2:#333b4e;--a:#6d7dff;--a2:#22d3ee;--t:#e8eaf0;--m:#8a91a5;--g:#34d399}
+body{font-family:Inter,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;background:var(--bg);color:var(--t);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:28px 20px 64px;background-image:radial-gradient(ellipse 55% 35% at 50% -5%,rgba(109,125,255,.08),transparent 70%);position:relative}
+#bgfx{position:fixed;inset:0;z-index:-1;display:block}
+.top{width:100%;max-width:920px;display:flex;align-items:center;justify-content:space-between;margin-bottom:40px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.02rem;letter-spacing:-.01em}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--a),#4338ca);color:#fff;font-size:.95rem}
+.lang{display:flex;gap:2px;background:var(--s);border:1px solid var(--b);border-radius:9px;padding:3px}
+.lang button{border:none;background:none;color:var(--m);font:inherit;font-size:.78rem;font-weight:600;padding:5px 13px;border-radius:6px;cursor:pointer;transition:color .15s,background .15s}
+.lang button:hover{color:var(--t)}
+.lang button.on{background:var(--s3);color:var(--t)}
+.lang button:focus-visible{outline:2px solid var(--a);outline-offset:1px}
+header{text-align:center;margin-bottom:36px;max-width:640px}
+header h1{font-size:1.7rem;font-weight:700;letter-spacing:-.02em;margin-bottom:10px}
+header p{color:var(--m);font-size:.95rem;line-height:1.6}
+.tabs{display:flex;gap:4px;width:100%;max-width:920px;border-bottom:1px solid var(--b);margin-bottom:22px}
+.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--m);padding:11px 18px;font:inherit;font-size:.93rem;font-weight:600;cursor:pointer;transition:color .15s,border-color .15s;margin-bottom:-1px}
+.tab:hover{color:var(--t)}
+.tab.on{color:var(--t);border-bottom-color:var(--a)}
+.tab:focus-visible{outline:2px solid var(--a);outline-offset:-2px}
+.card{background:var(--s);border:1px solid var(--b);border-radius:14px;padding:28px;width:100%;max-width:920px;box-shadow:0 10px 32px rgba(0,0,0,.35)}
+.opts{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.opt-label{color:var(--m);font-size:.88rem;font-weight:600}
+.dd{position:relative;flex:1;min-width:260px;max-width:460px}
+.dd-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:10px 14px;color:var(--t);font:inherit;font-size:.9rem;cursor:pointer;transition:border-color .15s}
+.dd-btn:hover{border-color:var(--b2)}
+.dd-btn:focus-visible{outline:2px solid var(--a);outline-offset:1px}
+.dd-btn:disabled{opacity:.55;cursor:not-allowed}
+.dd.open .dd-btn{border-color:var(--a)}
+.dd-cur{display:flex;align-items:center;gap:8px;min-width:0}
+.dd-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dd-badge{flex-shrink:0;font-size:.7rem;font-weight:600;color:var(--m);background:var(--s3);border:1px solid var(--b);border-radius:5px;padding:2px 7px}
+.dd-chev{color:var(--m);font-size:.68rem;transition:transform .15s;flex-shrink:0}
+.dd.open .dd-chev{transform:rotate(180deg)}
+.dd-list{position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;background:var(--s2);border:1px solid var(--b);border-radius:12px;padding:5px;list-style:none;box-shadow:0 18px 48px rgba(0,0,0,.55);display:none;max-height:340px;overflow:auto}
+.dd.open .dd-list{display:block}
+.dd-opt{padding:9px 11px;border-radius:8px;cursor:pointer}
+.dd-opt:hover{background:var(--s3)}
+.dd-opt[aria-selected="true"]{background:rgba(109,125,255,.10)}
+.dd-orow{display:flex;align-items:center;gap:8px}
+.dd-orow .dd-name{font-size:.88rem;flex:1}
+.dd-check{color:var(--a);font-size:.8rem;flex-shrink:0}
+.dd-odesc{margin-top:2px;font-size:.78rem;color:var(--m);line-height:1.45}
+#dz,#udz{border:1.5px dashed var(--b2);border-radius:12px;padding:52px 32px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;position:relative;user-select:none}
+#dz:hover,#dz.ov,#udz:hover,#udz.ov{border-color:var(--a);background:rgba(109,125,255,.05)}
+#dz:focus-within,#udz:focus-within{outline:2px solid var(--a);outline-offset:3px}
+#dz input,#udz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.di{color:var(--m);margin-bottom:14px}
+.dt{font-size:1.02rem;font-weight:600;margin-bottom:8px;max-width:540px;margin-left:auto;margin-right:auto}
+.ds{color:var(--m);font-size:.85rem;line-height:1.7}
+.browse{display:inline-block;margin-top:16px;border:1px solid var(--b2);background:var(--s3);color:var(--t);border-radius:9px;padding:9px 22px;font-weight:600;font-size:.88rem;pointer-events:none}
+#pw,#upw{display:none;margin-top:22px}
+.pt{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}
+.pl{font-size:.86rem;color:var(--m)}
+.pp{font-size:.86rem;font-weight:700;color:var(--a);font-variant-numeric:tabular-nums}
+.ptrack{background:var(--s2);border-radius:999px;height:8px;overflow:hidden}
+.pfill{height:100%;background:linear-gradient(90deg,var(--a),var(--a2));border-radius:999px;transition:width .35s;width:0%}
+.pstep{display:flex;gap:22px;flex-wrap:wrap;margin-top:16px}
+.step{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--m);transition:color .2s}
+.step.ac{color:var(--t)}
+.step.dn{color:var(--g)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--b2);flex-shrink:0;transition:background .2s}
+.step.ac .dot{background:var(--a)}
+.step.dn .dot{background:var(--g)}
+#rw,#urw{display:none;margin-top:22px}
+.sb{display:inline-flex;align-items:center;gap:7px;background:rgba(52,211,153,.1);color:var(--g);border:1px solid rgba(52,211,153,.25);border-radius:999px;padding:5px 14px;font-size:.8rem;font-weight:600;margin-bottom:16px}
+.imgs{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px}
+@media(max-width:640px){.imgs{grid-template-columns:1fr}.card{padding:18px}#dz,#udz{padding:40px 16px}.top{margin-bottom:28px}}
+.ic{border-radius:10px;overflow:hidden;border:1px solid var(--b);background:var(--s2)}
+.il{padding:8px 13px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--m);border-bottom:1px solid var(--b)}
+.ic img{width:100%;display:block;max-height:380px;object-fit:contain}
+.ck img{background:repeating-conic-gradient(#1c212c 0% 25%,#12151d 0% 50%) 0 0/20px 20px}
+.ac2{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:9px;font-size:.9rem;font-weight:600;cursor:pointer;border:1px solid transparent;transition:background .15s,border-color .15s,color .15s;white-space:nowrap;min-height:42px;font-family:inherit}
+.btn:focus-visible{outline:2px solid var(--a2);outline-offset:2px}
+.bp{background:var(--a);color:#fff}
+.bp:hover{background:#5b6cf2}
+.bs{background:var(--s3);color:var(--t);border-color:var(--b2)}
+.bs:hover{border-color:var(--a2)}
+.bg2{background:none;color:var(--m);border-color:var(--b)}
+.bg2:hover{color:var(--t);border-color:var(--b2)}
+#eb,#ueb{display:none;margin-top:16px;background:rgba(248,113,113,.08);color:#fca5a5;border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:12px 16px;font-size:.86rem;white-space:pre-wrap;line-height:1.55}
+footer{margin-top:36px;color:var(--m);font-size:.78rem;text-align:center;line-height:1.9}
+footer a{color:#9fb0ff;text-decoration:none}
+footer a:hover{text-decoration:underline}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<canvas id="bgfx" aria-hidden="true"></canvas>
+<div class="top">
+<div class="brand"><span class="brand-mark" aria-hidden="true">✂</span><span>BG Remover</span></div>
+<div class="lang" role="group" aria-label="Language">
+<button type="button" id="lang-en" class="on">EN</button>
+<button type="button" id="lang-ru">RU</button>
+</div>
+</div>
+<header>
+<h1 data-i18n="h1"></h1>
+<p data-i18n="subtitle"></p>
+</header>
+<div class="tabs" role="tablist">
+<button class="tab on" id="tab-bg" role="tab" aria-selected="true" data-i18n="tab_bg"></button>
+<button class="tab" id="tab-up" role="tab" aria-selected="false" data-i18n="tab_up"></button>
+</div>
+<main class="card" id="panel-bg">
+<div class="opts">
+<span class="opt-label" data-i18n="lbl_model"></span>
+<div class="dd" id="dd-bg"></div>
+</div>
+<div id="dz">
+<input type="file" id="fi" accept="image/*"/>
+<div class="di" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5L6 21"/></svg></div>
+<div class="dt" data-i18n="dz_title"></div>
+<div class="ds"><span data-i18n="hint_bg"></span><br/><span class="browse" data-i18n="browse"></span></div>
+</div>
+<div id="eb" role="alert"></div>
+<div id="pw">
+<div class="pt"><span class="pl" id="pl">…</span><span class="pp" id="pp">0%</span></div>
+<div class="ptrack"><div class="pfill" id="pf"></div></div>
+<div class="pstep">
+<div class="step" id="s0"><div class="dot"></div><span data-i18n="s0"></span></div>
+<div class="step" id="s1"><div class="dot"></div><span data-i18n="s1"></span></div>
+<div class="step" id="s2"><div class="dot"></div><span data-i18n="s2"></span></div>
+</div>
+</div>
+<div id="rw">
+<div class="sb" data-i18n="ok_bg"></div>
+<div class="imgs">
+<div class="ic"><div class="il" data-i18n="lbl_orig"></div><img id="oi" src="" alt="Original image"/></div>
+<div class="ic ck"><div class="il" data-i18n="lbl_result"></div><img id="ri" src="" alt="Result image"/></div>
+</div>
+<div class="ac2">
+<button class="btn bp" id="d1" data-i18n="btn_png"></button>
+<button class="btn bs" id="d2" data-i18n="btn_webp"></button>
+<button class="btn bg2" id="dr" data-i18n="btn_new"></button>
+</div>
+</div>
+</main>
+<section class="card" id="panel-up" style="display:none">
+<div class="opts">
+<span class="opt-label" data-i18n="lbl_mode"></span>
+<div class="dd" id="dd-up"></div>
+</div>
+<div id="udz">
+<input type="file" id="ufi" accept="image/*"/>
+<div class="di" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/><path d="M8 11h6M11 8v6"/></svg></div>
+<div class="dt" data-i18n="dz_title"></div>
+<div class="ds"><span data-i18n="hint_up"></span><br/><span data-i18n="hint_up2"></span><br/><span class="browse" data-i18n="browse"></span></div>
+</div>
+<div id="ueb" role="alert"></div>
+<div id="upw">
+<div class="pt"><span class="pl" id="upl">…</span><span class="pp" id="upp">0%</span></div>
+<div class="ptrack"><div class="pfill" id="upf"></div></div>
+</div>
+<div id="urw">
+<div class="sb" data-i18n="ok_up"></div>
+<div class="imgs">
+<div class="ic"><div class="il" id="uol"></div><img id="uoi" src="" alt="Original image"/></div>
+<div class="ic"><div class="il" id="uil"></div><img id="uri" src="" alt="Upscaled image"/></div>
+</div>
+<div class="ac2">
+<button class="btn bp" id="ud1" data-i18n="btn_png"></button>
+<button class="btn bg2" id="udr" data-i18n="btn_new"></button>
+</div>
+</div>
+</section>
+<footer><span data-i18n="footer1"></span><br/><span data-i18n="footer2"></span> <a href="https://github.com/imgly/background-removal-js" target="_blank" rel="noopener">@imgly/background-removal</a> · <a href="https://huggingface.co/briaai/RMBG-1.4" target="_blank" rel="noopener">RMBG-1.4</a> · <a href="https://github.com/mv-lab/swin2sr" target="_blank" rel="noopener">Swin2SR</a></footer>
+<script type="module">
+// All neural-network processing runs in worker.js (a Web Worker), so the UI
+// thread never blocks and the page stays responsive during inference.
+
+// ---------- i18n ----------
+const I18N = {
+  en: {
+    title: 'BG Remover \u2014 background removal & image upscaling',
+    h1: 'Background removal & image upscaling',
+    subtitle: 'Runs entirely in the browser. Images are processed locally and never uploaded.',
+    tab_bg: 'Background removal',
+    tab_up: 'Upscale \u00d72 / \u00d74',
+    lbl_model: 'Model',
+    lbl_mode: 'Mode',
+    dz_title: 'Drag & drop an image, paste from the clipboard (Ctrl+V), or click to browse',
+    browse: 'Select file',
+    hint_bg: 'PNG, JPG, WEBP, AVIF \u00b7 up to 30 MB',
+    hint_up: 'PNG, JPG, WEBP, AVIF \u00b7 \u00d72 up to ~4 MP \u00b7 \u00d74 up to ~2.3 MP',
+    hint_up2: 'Processing runs on this device; large images may take several minutes',
+    s0: 'Model download', s1: 'Processing', s2: 'Done',
+    ok_bg: 'Background removed',
+    ok_up: 'Upscaling complete',
+    lbl_orig: 'Original', lbl_result: 'Result', lbl_up: 'Upscaled \u00d7{s}',
+    btn_png: 'Download PNG', btn_webp: 'Download WEBP', btn_new: 'New image',
+    footer1: 'All processing happens locally in the browser \u2014 images never leave this device.',
+    footer2: 'Built with',
+    p_read: 'Reading image\u2026', p_done: 'Done',
+    w_engine: 'Loading engine\u2026',
+    w_cdn: 'Selecting CDN mirror\u2026',
+    w_model: 'Downloading model (one-time, cached by the browser)\u2026',
+    w_infer: 'Processing\u2026',
+    w_tile: 'Processing tile {n} of {m}\u2026',
+    w_finish: 'Finalizing\u2026',
+    err_type: 'Unsupported file type. Supported formats: PNG, JPG, WEBP, AVIF.',
+    err_size: 'The file is too large ({s} MB). Maximum size: 30 MB.',
+    err_large_x2: 'The image ({w}\u00d7{h}) exceeds the \u00d72 limit of ~{mp} MP. A smaller image is required.',
+    err_large_x4: 'The image ({w}\u00d7{h}) exceeds the \u00d74 limit of ~{mp} MP. The \u00d72 mode has a higher limit, or a smaller image can be used.',
+    err_cdn: 'No CDN mirror is currently reachable. Check the internet connection and try again later.',
+    err_worker: 'The processing worker failed to start. The page must be served over HTTP(S) \u2014 opening the file directly from disk will not work.',
+    err_prefix: 'Error: ',
+    err_hint: '\n\nAn internet connection is required on first use \u2014 the model is downloaded once and cached by the browser.'
+  },
+  ru: {
+    title: 'BG Remover \u2014 \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u0435 \u0444\u043e\u043d\u0430 \u0438 \u0430\u043f\u0441\u043a\u0435\u0439\u043b \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0439',
+    h1: '\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435 \u0444\u043e\u043d\u0430 \u0438 \u0430\u043f\u0441\u043a\u0435\u0439\u043b \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0439',
+    subtitle: '\u0420\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043f\u043e\u043b\u043d\u043e\u0441\u0442\u044c\u044e \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435. \u0418\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u044f \u043e\u0431\u0440\u0430\u0431\u0430\u0442\u044b\u0432\u0430\u044e\u0442\u0441\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e \u0438 \u043d\u0438\u043a\u0443\u0434\u0430 \u043d\u0435 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u044e\u0442\u0441\u044f.',
+    tab_bg: '\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435 \u0444\u043e\u043d\u0430',
+    tab_up: '\u0410\u043f\u0441\u043a\u0435\u0439\u043b \u00d72 / \u00d74',
+    lbl_model: '\u041c\u043e\u0434\u0435\u043b\u044c',
+    lbl_mode: '\u0420\u0435\u0436\u0438\u043c',
+    dz_title: '\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435, \u0432\u0441\u0442\u0430\u0432\u044c\u0442\u0435 \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430 \u043e\u0431\u043c\u0435\u043d\u0430 (Ctrl+V) \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438\u0442\u0435, \u0447\u0442\u043e\u0431\u044b \u0432\u044b\u0431\u0440\u0430\u0442\u044c \u0444\u0430\u0439\u043b',
+    browse: '\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0444\u0430\u0439\u043b',
+    hint_bg: 'PNG, JPG, WEBP, AVIF \u00b7 \u0434\u043e 30 \u041c\u0411',
+    hint_up: 'PNG, JPG, WEBP, AVIF \u00b7 \u00d72 \u2014 \u0434\u043e ~4 \u041c\u041f, \u00d74 \u2014 \u0434\u043e ~2,3 \u041c\u041f',
+    hint_up2: '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u0438\u0434\u0451\u0442 \u043d\u0430 \u044d\u0442\u043e\u043c \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u0435; \u0431\u043e\u043b\u044c\u0448\u0438\u0435 \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u044f \u043c\u043e\u0433\u0443\u0442 \u0437\u0430\u043d\u044f\u0442\u044c \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u043c\u0438\u043d\u0443\u0442',
+    s0: '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043c\u043e\u0434\u0435\u043b\u0438', s1: '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430', s2: '\u0413\u043e\u0442\u043e\u0432\u043e',
+    ok_bg: '\u0424\u043e\u043d \u0443\u0434\u0430\u043b\u0451\u043d',
+    ok_up: '\u0410\u043f\u0441\u043a\u0435\u0439\u043b \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043d',
+    lbl_orig: '\u041e\u0440\u0438\u0433\u0438\u043d\u0430\u043b', lbl_result: '\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442', lbl_up: '\u0410\u043f\u0441\u043a\u0435\u0439\u043b \u00d7{s}',
+    btn_png: '\u0421\u043a\u0430\u0447\u0430\u0442\u044c PNG', btn_webp: '\u0421\u043a\u0430\u0447\u0430\u0442\u044c WEBP', btn_new: '\u041d\u043e\u0432\u043e\u0435 \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435',
+    footer1: '\u0412\u0441\u044f \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u0432\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 \u2014 \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u044f \u043d\u0435 \u043f\u043e\u043a\u0438\u0434\u0430\u044e\u0442 \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u043e.',
+    footer2: '\u0420\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043d\u0430 \u0431\u0430\u0437\u0435',
+    p_read: '\u0427\u0442\u0435\u043d\u0438\u0435 \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u044f\u2026', p_done: '\u0413\u043e\u0442\u043e\u0432\u043e',
+    w_engine: '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0434\u0432\u0438\u0436\u043a\u0430\u2026',
+    w_cdn: '\u0412\u044b\u0431\u043e\u0440 CDN-\u0437\u0435\u0440\u043a\u0430\u043b\u0430\u2026',
+    w_model: '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043c\u043e\u0434\u0435\u043b\u0438 (\u043e\u0434\u0438\u043d \u0440\u0430\u0437, \u043a\u044d\u0448\u0438\u0440\u0443\u0435\u0442\u0441\u044f \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u043e\u043c)\u2026',
+    w_infer: '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430\u2026',
+    w_tile: '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442\u0430 {n} \u0438\u0437 {m}\u2026',
+    w_finish: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u0435\u2026',
+    err_type: '\u041d\u0435\u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043c\u044b\u0439 \u0442\u0438\u043f \u0444\u0430\u0439\u043b\u0430. \u041f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u044e\u0442\u0441\u044f PNG, JPG, WEBP, AVIF.',
+    err_size: '\u0424\u0430\u0439\u043b \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u043e\u0439 ({s} \u041c\u0411). \u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0440\u0430\u0437\u043c\u0435\u0440 \u2014 30 \u041c\u0411.',
+    err_large_x2: '\u0418\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435 ({w}\u00d7{h}) \u043f\u0440\u0435\u0432\u044b\u0448\u0430\u0435\u0442 \u043b\u0438\u043c\u0438\u0442 \u00d72 \u2014 \u043e\u043a\u043e\u043b\u043e {mp} \u041c\u041f. \u0422\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435 \u043c\u0435\u043d\u044c\u0448\u0435\u0433\u043e \u0440\u0430\u0437\u043c\u0435\u0440\u0430.',
+    err_large_x4: '\u0418\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435 ({w}\u00d7{h}) \u043f\u0440\u0435\u0432\u044b\u0448\u0430\u0435\u0442 \u043b\u0438\u043c\u0438\u0442 \u00d74 \u2014 \u043e\u043a\u043e\u043b\u043e {mp} \u041c\u041f. \u041c\u043e\u0436\u043d\u043e \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u0440\u0435\u0436\u0438\u043c \u00d72 (\u0443 \u043d\u0435\u0433\u043e \u043b\u0438\u043c\u0438\u0442 \u0432\u044b\u0448\u0435) \u0438\u043b\u0438 \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435 \u043c\u0435\u043d\u044c\u0448\u0435\u0433\u043e \u0440\u0430\u0437\u043c\u0435\u0440\u0430.',
+    err_cdn: 'CDN-\u0437\u0435\u0440\u043a\u0430\u043b\u0430 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b. \u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435 \u043a \u0438\u043d\u0442\u0435\u0440\u043d\u0435\u0442\u0443 \u0438 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435 \u043f\u043e\u043f\u044b\u0442\u043a\u0443 \u043f\u043e\u0437\u0436\u0435.',
+    err_worker: '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0444\u043e\u043d\u043e\u0432\u044b\u0439 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a. \u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 \u0434\u043e\u043b\u0436\u043d\u0430 \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0442\u044c\u0441\u044f \u043f\u043e HTTP(S) \u2014 \u043f\u0440\u0438 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u0438 \u0444\u0430\u0439\u043b\u0430 \u0441 \u0434\u0438\u0441\u043a\u0430 \u043d\u0430\u043f\u0440\u044f\u043c\u0443\u044e \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u043d\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442.',
+    err_prefix: '\u041e\u0448\u0438\u0431\u043a\u0430: ',
+    err_hint: '\n\n\u041f\u0440\u0438 \u043f\u0435\u0440\u0432\u043e\u043c \u0437\u0430\u043f\u0443\u0441\u043a\u0435 \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f \u0438\u043d\u0442\u0435\u0440\u043d\u0435\u0442 \u2014 \u043c\u043e\u0434\u0435\u043b\u044c \u0441\u043a\u0430\u0447\u0438\u0432\u0430\u0435\u0442\u0441\u044f \u043e\u0434\u0438\u043d \u0440\u0430\u0437 \u0438 \u043a\u044d\u0448\u0438\u0440\u0443\u0435\u0442\u0441\u044f \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u043e\u043c.'
+  }
+};
+let lang = 'en';
+try { const sl = localStorage.getItem('lang'); if (sl === 'ru' || sl === 'en') lang = sl; } catch (_) {}
+function t(key, params) {
+  let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+  if (params) for (const k in params) s = s.replaceAll('{' + k + '}', String(params[k]));
+  return s;
+}
+
+// ---------- Model catalogs ----------
+const BG_MODELS = [
+  { value: 'rmbg', size: '44 MB', name: 'RMBG 1.4', desc: { en: 'Universal: renders, game art, anime, graphics', ru: '\u0423\u043d\u0438\u0432\u0435\u0440\u0441\u0430\u043b\u044c\u043d\u0430\u044f: \u0440\u0435\u043d\u0434\u0435\u0440\u044b, \u0438\u0433\u0440\u043e\u0432\u0430\u044f \u0433\u0440\u0430\u0444\u0438\u043a\u0430, \u0430\u043d\u0438\u043c\u0435, \u0430\u0440\u0442\u044b' } },
+  { value: 'isnet_quint8', size: '42 MB', name: 'ISNet Compact', desc: { en: 'Fastest download, basic quality', ru: '\u0411\u044b\u0441\u0442\u0440\u0430\u044f \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0430, \u0431\u0430\u0437\u043e\u0432\u043e\u0435 \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e' } },
+  { value: 'isnet_fp16', size: '84 MB', name: 'ISNet Balanced', desc: { en: 'Balance between size and quality', ru: '\u0411\u0430\u043b\u0430\u043d\u0441 \u0440\u0430\u0437\u043c\u0435\u0440\u0430 \u0438 \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u0430' } },
+  { value: 'isnet', size: '170 MB', name: 'ISNet Full', desc: { en: 'Highest quality for photos', ru: '\u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0435 \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e \u0434\u043b\u044f \u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0439' } }
+];
+const UP_MODELS = [
+  { value: 'Xenova/swin2SR-classical-sr-x2-64', size: '50 MB', name: 'Swin2SR \u00d72', desc: { en: 'Renders, art, screenshots', ru: '\u0420\u0435\u043d\u0434\u0435\u0440\u044b, \u0430\u0440\u0442\u044b, \u0441\u043a\u0440\u0438\u043d\u0448\u043e\u0442\u044b' } },
+  { value: 'Xenova/swin2SR-classical-sr-x4-64', size: '50 MB', name: 'Swin2SR \u00d74', desc: { en: 'Renders, art, screenshots', ru: '\u0420\u0435\u043d\u0434\u0435\u0440\u044b, \u0430\u0440\u0442\u044b, \u0441\u043a\u0440\u0438\u043d\u0448\u043e\u0442\u044b' } },
+  { value: 'Xenova/swin2SR-realworld-sr-x4-64-bsrgan-psnr', size: '50 MB', name: 'Swin2SR \u00d74 Real-world', desc: { en: 'Photos, noisy or compressed images', ru: '\u0424\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0438, \u0448\u0443\u043c\u043d\u044b\u0435 \u0438 \u0441\u0436\u0430\u0442\u044b\u0435 \u0441\u043d\u0438\u043c\u043a\u0438' } }
+];
+
+// ---------- Custom dropdown ----------
+function makeDropdown(mountId, items, storageKey, defaultValue) {
+  const mount = document.getElementById(mountId);
+  let value = defaultValue;
+  try { const sv = localStorage.getItem(storageKey); if (sv && items.some(i => i.value === sv)) value = sv; } catch (_) {}
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'dd-btn';
+  btn.setAttribute('aria-haspopup', 'listbox');
+  btn.setAttribute('aria-expanded', 'false');
+  const list = document.createElement('ul');
+  list.className = 'dd-list'; list.setAttribute('role', 'listbox');
+  mount.append(btn, list);
+  function render() {
+    const cur = items.find(i => i.value === value) || items[0];
+    btn.textContent = '';
+    const curWrap = document.createElement('span'); curWrap.className = 'dd-cur';
+    const curName = document.createElement('span'); curName.className = 'dd-name'; curName.textContent = cur.name;
+    const curBadge = document.createElement('span'); curBadge.className = 'dd-badge'; curBadge.textContent = cur.size;
+    curWrap.append(curName, curBadge);
+    const chev = document.createElement('span'); chev.className = 'dd-chev'; chev.setAttribute('aria-hidden', 'true'); chev.textContent = '\u25be';
+    btn.append(curWrap, chev);
+    list.textContent = '';
+    for (const it of items) {
+      const li = document.createElement('li');
+      li.className = 'dd-opt';
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', String(it.value === value));
+      const row = document.createElement('div'); row.className = 'dd-orow';
+      const nm = document.createElement('span'); nm.className = 'dd-name'; nm.textContent = it.name;
+      const bd = document.createElement('span'); bd.className = 'dd-badge'; bd.textContent = it.size;
+      row.append(nm, bd);
+      if (it.value === value) {
+        const ck = document.createElement('span'); ck.className = 'dd-check'; ck.textContent = '\u2713';
+        row.append(ck);
+      }
+      const ds = document.createElement('div'); ds.className = 'dd-odesc'; ds.textContent = it.desc[lang] || it.desc.en;
+      li.append(row, ds);
+      li.addEventListener('click', () => { select(it.value); close(); });
+      list.appendChild(li);
+    }
+  }
+  function select(v) { value = v; try { localStorage.setItem(storageKey, v); } catch (_) {} render(); }
+  function open() { mount.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+  function close() { mount.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
+  btn.addEventListener('click', () => { mount.classList.contains('open') ? close() : open(); });
+  btn.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  document.addEventListener('click', e => { if (!mount.contains(e.target)) close(); });
+  render();
+  return {
+    get value() { return value; },
+    refresh: render,
+    set disabled(d) { btn.disabled = d; }
+  };
+}
+const ddBg = makeDropdown('dd-bg', BG_MODELS, 'bg-model', 'rmbg');
+const ddUp = makeDropdown('dd-up', UP_MODELS, 'up-model', 'Xenova/swin2SR-classical-sr-x2-64');
+
+// ---------- Language switching ----------
+const langEn = document.getElementById('lang-en'), langRu = document.getElementById('lang-ru');
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  langEn.classList.toggle('on', lang === 'en');
+  langRu.classList.toggle('on', lang === 'ru');
+  ddBg.refresh(); ddUp.refresh();
+  setUpLabels();
+}
+function setLang(l) { lang = l; try { localStorage.setItem('lang', l); } catch (_) {} applyLang(); }
+langEn.addEventListener('click', () => setLang('en'));
+langRu.addEventListener('click', () => setLang('ru'));
+
+// ---------- Worker plumbing ----------
+// Limits duplicated from worker.js for the pre-flight check — keep in sync.
+const UP_MAX_X2 = 4200000, UP_MAX_X4 = 2300000;
+const MAX_SIZE = 30 * 1024 * 1024;
+let worker = null, jobSeq = 0, activeJob = null;
+function ensureWorker() {
+  if (worker) return worker;
+  const w = new Worker('./worker.js', { type: 'module' });
+  w.onmessage = e => {
+    const d = e.data || {};
+    if (!activeJob || d.id !== activeJob.id) return;
+    if (d.type === 'progress') activeJob.onProgress(d.label || {}, d.pct || 0);
+    else if (d.type === 'done') { const j = activeJob; activeJob = null; j.resolve(d.result); }
+    else if (d.type === 'error') { const j = activeJob; activeJob = null; j.reject(d); }
+  };
+  w.onerror = ev => {
+    const j = activeJob; activeJob = null;
+    worker = null;
+    try { w.terminate(); } catch (_) {}
+    if (j) j.reject({ code: 'worker', message: (ev && ev.message) || '' });
+  };
+  worker = w;
+  return w;
+}
+function runJob(payload, onProgress) {
+  return new Promise((resolve, reject) => {
+    const id = ++jobSeq;
+    activeJob = { id, resolve, reject, onProgress };
+    let w;
+    try { w = ensureWorker(); } catch (e) { activeJob = null; return reject({ code: 'worker', message: String(e) }); }
+    w.postMessage(Object.assign({ id }, payload));
+  });
+}
+function workerLabel(label) {
+  const k = label.k || 'infer';
+  if (k === 'tile') return t('w_tile', { n: label.n, m: label.m });
+  return t('w_' + k);
+}
+function workerError(d) {
+  if (d && d.code === 'too_large' && d.info) return t(d.info.scale === 4 ? 'err_large_x4' : 'err_large_x2', { w: d.info.w, h: d.info.h, mp: (d.info.maxPx / 1e6).toFixed(1) });
+  if (d && (d.code === 'cdn_assets' || d.code === 'cdn_lib')) return t('err_cdn');
+  if (d && d.code === 'worker') return t('err_worker') + (d.message ? '\n\n' + d.message : '');
+  return t('err_prefix') + ((d && d.message) || d) + t('err_hint');
+}
+
+// ---------- Shared helpers ----------
+// Assigns a new object URL to an image and frees the previous one (avoids memory leaks)
+function setImage(img, blob) {
+  if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  const url = URL.createObjectURL(blob);
+  img.dataset.url = url;
+  img.src = url;
+}
+
+// ---------- Tabs ----------
+const tabBg = document.getElementById('tab-bg'), tabUp = document.getElementById('tab-up');
+const panelBg = document.getElementById('panel-bg'), panelUp = document.getElementById('panel-up');
+let activeTab = 'bg';
+function switchTab(name) {
+  activeTab = name;
+  const isBg = name === 'bg';
+  panelBg.style.display = isBg ? 'block' : 'none';
+  panelUp.style.display = isBg ? 'none' : 'block';
+  tabBg.className = 'tab' + (isBg ? ' on' : '');
+  tabUp.className = 'tab' + (isBg ? '' : ' on');
+  tabBg.setAttribute('aria-selected', String(isBg));
+  tabUp.setAttribute('aria-selected', String(!isBg));
+}
+tabBg.addEventListener('click', () => switchTab('bg'));
+tabUp.addEventListener('click', () => switchTab('up'));
+
+// ---------- Background removal tab ----------
+const dz = document.getElementById('dz'), fi = document.getElementById('fi');
+const pw = document.getElementById('pw'), pl = document.getElementById('pl');
+const pp = document.getElementById('pp'), pf = document.getElementById('pf');
+const eb = document.getElementById('eb'), rw = document.getElementById('rw');
+const oi = document.getElementById('oi'), ri = document.getElementById('ri');
+const d2 = document.getElementById('d2');
+let resultBlob = null, baseName = 'image', busy = false;
+
+// Safari cannot produce WEBP via canvas.toBlob — hide the button if unsupported
+const webpSupported = document.createElement('canvas').toDataURL('image/webp').startsWith('data:image/webp');
+if (!webpSupported) d2.style.display = 'none';
+
+// Drag & drop (with a depth counter so highlighting does not flicker over children)
+let dragDepth = 0;
+dz.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; dz.classList.add('ov'); });
+dz.addEventListener('dragover', e => e.preventDefault());
+dz.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; dz.classList.remove('ov'); } });
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; dz.classList.remove('ov');
+  handleFile(e.dataTransfer.files[0]);
+});
+// Prevent a stray drop outside the zone from opening the file in the tab
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+
+// Clipboard paste (Ctrl+V) — routed to the active tab
+document.addEventListener('paste', e => {
+  const file = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith('image/'));
+  if (file) { e.preventDefault(); (activeTab === 'up' ? handleUpFile : handleFile)(file); }
+});
+
+fi.addEventListener('change', e => handleFile(e.target.files[0]));
+
+document.getElementById('dr').addEventListener('click', () => {
+  rw.style.display = 'none'; pw.style.display = 'none'; dz.style.display = 'block';
+  eb.style.display = 'none'; fi.value = ''; resultBlob = null;
+  [0, 1, 2].forEach(i => document.getElementById('s' + i).className = 'step');
+});
+
+document.getElementById('d1').addEventListener('click', () => download('image/png', 'png'));
+d2.addEventListener('click', () => download('image/webp', 'webp'));
+
+function handleFile(file) {
+  if (busy || !file) return;
+  if (!file.type.startsWith('image/')) return showError(t('err_type'));
+  if (file.size > MAX_SIZE) return showError(t('err_size', { s: (file.size / 1048576).toFixed(1) }));
+  process(file);
+}
+
+async function download(mime, ext) {
+  if (!resultBlob) return;
+  let blob = resultBlob;
+  if (mime !== 'image/png') {
+    const bitmap = await createImageBitmap(resultBlob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width; canvas.height = bitmap.height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    bitmap.close();
+    blob = await new Promise(r => canvas.toBlob(r, mime, 0.92));
+    // Fallback: if the browser silently returned a different format, ship PNG
+    if (!blob || blob.type !== mime) { blob = resultBlob; ext = 'png'; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = baseName + '-no-bg.' + ext;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+async function process(file) {
+  busy = true;
+  ddBg.disabled = true;
+  eb.style.display = 'none'; dz.style.display = 'none'; rw.style.display = 'none'; pw.style.display = 'block';
+  baseName = file.name ? file.name.replace(/\.[^.]+$/, '') : 'image';
+  setImage(oi, file);
+  setStep(0); progress(t('w_engine'), 3);
+  try {
+    const result = await runJob({ task: 'removeBg', file, model: ddBg.value }, (label, pct) => {
+      if (label.k === 'infer') setStep(1);
+      progress(workerLabel(label), pct);
+    });
+    resultBlob = result.blob;
+    setImage(ri, resultBlob);
+    progress(t('p_done'), 100); setStep(2);
+    setTimeout(() => { pw.style.display = 'none'; rw.style.display = 'block'; }, 450);
+  } catch (d) {
+    pw.style.display = 'none'; dz.style.display = 'block';
+    showError(workerError(d));
+  } finally {
+    busy = false;
+    ddBg.disabled = false;
+  }
+}
+
+function progress(text, pct) { pl.textContent = text; pp.textContent = pct + '%'; pf.style.width = pct + '%'; }
+function setStep(n) { [0, 1, 2].forEach(i => { document.getElementById('s' + i).className = 'step' + (i < n ? ' dn' : i === n ? ' ac' : ''); }); }
+function showError(msg) { eb.style.display = 'block'; eb.textContent = msg; }
+
+// ---------- Upscale tab ----------
+const udz = document.getElementById('udz'), ufi = document.getElementById('ufi');
+const upw = document.getElementById('upw'), upl = document.getElementById('upl');
+const upp = document.getElementById('upp'), upf = document.getElementById('upf');
+const ueb = document.getElementById('ueb'), urw = document.getElementById('urw');
+const uoi = document.getElementById('uoi'), uri = document.getElementById('uri');
+const uol = document.getElementById('uol'), uil = document.getElementById('uil');
+let upBusy = false, upBlob = null, upName = 'image';
+let uolDims = null, uilInfo = null;
+
+function setUpLabels() {
+  uol.textContent = t('lbl_orig') + (uolDims ? ' \u00b7 ' + uolDims : '');
+  uil.textContent = uilInfo ? t('lbl_up', { s: uilInfo.s }) + ' \u00b7 ' + uilInfo.w + '\u00d7' + uilInfo.h : t('lbl_up', { s: '2' });
+}
+
+let upDragDepth = 0;
+udz.addEventListener('dragenter', e => { e.preventDefault(); upDragDepth++; udz.classList.add('ov'); });
+udz.addEventListener('dragover', e => e.preventDefault());
+udz.addEventListener('dragleave', () => { if (--upDragDepth <= 0) { upDragDepth = 0; udz.classList.remove('ov'); } });
+udz.addEventListener('drop', e => {
+  e.preventDefault(); upDragDepth = 0; udz.classList.remove('ov');
+  handleUpFile(e.dataTransfer.files[0]);
+});
+ufi.addEventListener('change', e => handleUpFile(e.target.files[0]));
+
+document.getElementById('udr').addEventListener('click', () => {
+  urw.style.display = 'none'; upw.style.display = 'none'; udz.style.display = 'block';
+  ueb.style.display = 'none'; ufi.value = ''; upBlob = null;
+});
+document.getElementById('ud1').addEventListener('click', () => {
+  if (!upBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(upBlob);
+  a.download = upName + '-upscaled.png';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+});
+
+function handleUpFile(file) {
+  if (upBusy || !file) return;
+  if (!file.type.startsWith('image/')) return showUpError(t('err_type'));
+  if (file.size > MAX_SIZE) return showUpError(t('err_size', { s: (file.size / 1048576).toFixed(1) }));
+  upscale(file);
+}
+
+async function upscale(file) {
+  upBusy = true;
+  ddUp.disabled = true;
+  ueb.style.display = 'none'; udz.style.display = 'none'; urw.style.display = 'none'; upw.style.display = 'block';
+  upName = file.name ? file.name.replace(/\.[^.]+$/, '') : 'image';
+  try {
+    upProgress(t('p_read'), 2);
+    const modelId = ddUp.value;
+    const scale = modelId.includes('x4') ? 4 : 2;
+    const maxPx = scale === 4 ? UP_MAX_X4 : UP_MAX_X2;
+    // Pre-flight dimension check on the main thread (the worker re-checks too)
+    let w = 0, h = 0;
+    try { const bmp = await createImageBitmap(file); w = bmp.width; h = bmp.height; bmp.close(); } catch (_) { /* let the worker validate */ }
+    if (w * h > maxPx) throw { code: 'too_large', info: { w, h, scale, maxPx } };
+    setImage(uoi, file);
+    uolDims = (w && h) ? w + '\u00d7' + h : null;
+    uilInfo = null;
+    setUpLabels();
+    const result = await runJob({ task: 'upscale', file, modelId }, (label, pct) => upProgress(workerLabel(label), pct));
+    upBlob = result.blob;
+    setImage(uri, upBlob);
+    uilInfo = { s: result.scale, w: result.width, h: result.height };
+    setUpLabels();
+    upProgress(t('p_done'), 100);
+    setTimeout(() => { upw.style.display = 'none'; urw.style.display = 'block'; }, 450);
+  } catch (d) {
+    upw.style.display = 'none'; udz.style.display = 'block';
+    showUpError(workerError(d));
+  } finally {
+    upBusy = false;
+    ddUp.disabled = false;
+  }
+}
+
+function upProgress(text, pct) { upl.textContent = text; upp.textContent = pct + '%'; upf.style.width = pct + '%'; }
+function showUpError(msg) { ueb.style.display = 'block'; ueb.textContent = msg; }
+
+applyLang();
+
+// ---------- Interactive particle background ----------
+// Lightweight canvas constellation: dots drift slowly, nearby dots link with
+// faint lines, and lines also reach toward the cursor. Purely decorative —
+// pointer-events are left on the canvas's default (it sits behind everything
+// via z-index, so it never blocks clicks) and it fully respects prefers-reduced-motion.
+(function () {
+  const canvas = document.getElementById('bgfx');
+  if (!canvas || !canvas.getContext) return;
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ctx = canvas.getContext('2d');
+  let w = 0, h = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let particles = [];
+  let raf = null;
+  const mouse = { x: -9999, y: -9999 };
+  const AREA_PER_DOT = 15000; // one particle per this many CSS px²
+  const LINK_DIST = 130;
+  const MOUSE_DIST = 170;
+
+  function resize() {
+    w = window.innerWidth; h = window.innerHeight;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const count = reduceMotion ? 0 : Math.min(150, Math.max(35, Math.round((w * h) / AREA_PER_DOT)));
+    particles = Array.from({ length: count }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.24, vy: (Math.random() - 0.5) * 0.24
+    }));
+  }
+
+  function frame() {
+    ctx.clearRect(0, 0, w, h);
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > w) p.vx *= -1;
+      if (p.y < 0 || p.y > h) p.vy *= -1;
+    }
+    for (let i = 0; i < particles.length; i++) {
+      const a = particles[i];
+      for (let j = i + 1; j < particles.length; j++) {
+        const b = particles[j];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d < LINK_DIST) {
+          ctx.strokeStyle = 'rgba(109,125,255,' + (0.16 * (1 - d / LINK_DIST)) + ')';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+      }
+      const dm = Math.hypot(a.x - mouse.x, a.y - mouse.y);
+      if (dm < MOUSE_DIST) {
+        ctx.strokeStyle = 'rgba(34,211,238,' + (0.4 * (1 - dm / MOUSE_DIST)) + ')';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(143,153,255,.55)';
+      ctx.beginPath(); ctx.arc(a.x, a.y, 1.6, 0, Math.PI * 2); ctx.fill();
+    }
+    if (particles.length) raf = requestAnimationFrame(frame);
+  }
+
+  function start() { if (raf) cancelAnimationFrame(raf); resize(); frame(); }
+  window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  window.addEventListener('mouseleave', () => { mouse.x = -9999; mouse.y = -9999; });
+  window.addEventListener('resize', start);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (raf) cancelAnimationFrame(raf); }
+    else start();
+  });
+  start();
+})();
+</script>
+</body>
+</html>
