@@ -131,7 +131,7 @@ footer a:hover{text-decoration:underline}
 <input type="file" id="ufi" accept="image/*" aria-label="Выбрать изображение для апскейла"/>
 <span class="di" aria-hidden="true">🔍</span>
 <div class="dt">Перетащи картинку, вставь из буфера (Ctrl+V) или кликни</div>
-<div class="ds">PNG, JPG, WEBP, AVIF · до ~1.2 МП (примерно 1200×1000)<br/>Считает на процессоре: большие картинки — до пары минут<br/><span>Выбрать файл</span></div>
+<div class="ds">PNG, JPG, WEBP, AVIF · ×2 — до ~4 МП, ×4 — до ~2.3 МП (Full HD влезает)<br/>Считает на процессоре: большие картинки — до нескольких минут<br/><span>Выбрать файл</span></div>
 </div>
 <div id="ueb" role="alert"></div>
 <div id="upw">
@@ -261,9 +261,13 @@ async function runRmbg(file) {
 }
 // --- Апскейл: нейросеть Swin2SR через ту же Transformers.js ---
 // Увеличивает картинку в 2 или 4 раза, дорисовывая детали. Считает на
-// процессоре (WASM), поэтому вход ограничен ~1.2 МП — иначе браузер будет
-// молотить слишком долго или упрётся в память.
-const UP_MAX_PIXELS = 1200000;
+// процессоре (WASM). Большие картинки автоматически режутся на фрагменты ~512px
+// с нахлёстом, каждый апскейлится отдельно, результат сшивается без швов —
+// так влезает и Full HD. Лимиты нужны, чтобы браузер не молотил часами.
+const UP_TILE = 512;       // размер фрагмента
+const UP_OVERLAP = 32;     // нахлёст фрагментов, чтобы не было швов на стыках
+const UP_MAX_X2 = 4200000; // ~4.2 МП для ×2 (примерно 2500×1600)
+const UP_MAX_X4 = 2300000; // ~2.3 МП для ×4 (хватает на Full HD 1920×1080)
 const upCache = {}; // кэш загруженных моделей апскейла (по id модели)
 async function loadUpscaler(modelId, onProgress) {
   if (upCache[modelId]) return upCache[modelId];
@@ -505,26 +509,58 @@ async function upscale(file) {
     upProgress('Читаю картинку…', 3);
     const tjs = await loadTJS();
     const image = await tjs.RawImage.fromURL(srcUrl);
-    if (image.width * image.height > UP_MAX_PIXELS) {
-      throw new Error('Картинка ' + image.width + '×' + image.height + ' — слишком большая для апскейла в браузере. Максимум ~1.2 МП (примерно 1200×1000). Уменьши её или вырежи нужный фрагмент.');
+    const modelId = us.value;
+    const scale = modelId.includes('x4') ? 4 : 2;
+    const maxPx = scale === 4 ? UP_MAX_X4 : UP_MAX_X2;
+    if (image.width * image.height > maxPx) {
+      throw new Error('Картинка ' + image.width + '×' + image.height + ' — слишком большая для апскейла ×' + scale + ' в браузере. Максимум для ×' + scale + ' — ~' + (maxPx / 1000000).toFixed(1).replace('.', ',') + ' МП. Уменьши её или вырежи нужный фрагмент' + (scale === 4 ? ', или возьми режим ×2 — у него лимит выше' : '') + '.');
     }
     setImage(uoi, file);
     uol.textContent = '📷 Оригинал · ' + image.width + '×' + image.height;
-    const modelId = us.value;
-    const scale = modelId.includes('x4') ? 4 : 2;
     upProgress('Загрузка модели…', 6);
     const up = await loadUpscaler(modelId, p => upProgress('Загрузка модели (~50 МБ, один раз)…', Math.min(55, Math.round(6 + p * 0.49))));
-    upProgress('Нейросеть дорисовывает детали… может занять пару минут', 60);
+    upProgress('Нейросеть дорисовывает детали… может занять несколько минут', 60);
     // Пауза, чтобы браузер успел перерисовать прогресс до тяжёлого счёта
     await new Promise(r => setTimeout(r, 60));
-    const out = await up(srcUrl);
-    upProgress('Собираю результат…', 94);
     const cv = document.createElement('canvas');
-    cv.width = out.width; cv.height = out.height;
-    cv.getContext('2d').drawImage(out.toCanvas(), 0, 0);
+    cv.width = image.width * scale; cv.height = image.height * scale;
+    const cctx = cv.getContext('2d');
+    if (image.width <= UP_TILE && image.height <= UP_TILE) {
+      // Маленькая картинка — апскейлим целиком за один проход
+      const out = await up(srcUrl);
+      cctx.drawImage(out.toCanvas(), 0, 0);
+    } else {
+      // Большая — режем на фрагменты с нахлёстом, апскейлим по одному и сшиваем
+      const src = document.createElement('canvas');
+      src.width = image.width; src.height = image.height;
+      src.getContext('2d').drawImage(image.toCanvas(), 0, 0);
+      const xs = tileOffsets(image.width), ys = tileOffsets(image.height);
+      const total = xs.length * ys.length;
+      let done = 0;
+      for (const sy of ys) {
+        for (const sx of xs) {
+          const tw = Math.min(UP_TILE, image.width - sx), th = Math.min(UP_TILE, image.height - sy);
+          const tc = document.createElement('canvas');
+          tc.width = tw; tc.height = th;
+          tc.getContext('2d').drawImage(src, sx, sy, tw, th, 0, 0, tw, th);
+          const out = await up(tc.toDataURL('image/png'));
+          // Внутренние края обрезаем на полнахлёста, чтобы стыки были незаметны
+          const x0 = sx === 0 ? 0 : sx + UP_OVERLAP / 2;
+          const y0 = sy === 0 ? 0 : sy + UP_OVERLAP / 2;
+          const x1 = sx + tw >= image.width ? sx + tw : sx + tw - UP_OVERLAP / 2;
+          const y1 = sy + th >= image.height ? sy + th : sy + th - UP_OVERLAP / 2;
+          cctx.drawImage(out.toCanvas(), (x0 - sx) * scale, (y0 - sy) * scale, (x1 - x0) * scale, (y1 - y0) * scale, x0 * scale, y0 * scale, (x1 - x0) * scale, (y1 - y0) * scale);
+          done++;
+          upProgress('Нейросеть дорисовывает детали… фрагмент ' + done + ' из ' + total, Math.min(92, Math.round(60 + (done / total) * 32)));
+          // Даём браузеру перерисовать прогресс между фрагментами
+          await new Promise(r => setTimeout(r, 30));
+        }
+      }
+    }
+    upProgress('Собираю результат…', 94);
     upBlob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('не удалось собрать PNG')), 'image/png'));
     setImage(uri, upBlob);
-    uil.textContent = '🔍 Апскейл ×' + scale + ' · ' + out.width + '×' + out.height;
+    uil.textContent = '🔍 Апскейл ×' + scale + ' · ' + cv.width + '×' + cv.height;
     upProgress('Готово!', 100);
     setTimeout(() => { upw.style.display = 'none'; urw.style.display = 'block'; }, 450);
   } catch (e) {
@@ -537,6 +573,15 @@ async function upscale(file) {
   }
 }
 
+// Позиции фрагментов вдоль одной оси: шаг = размер минус нахлёст, последний прижат к краю
+function tileOffsets(size) {
+  if (size <= UP_TILE) return [0];
+  const step = UP_TILE - UP_OVERLAP;
+  const offs = [];
+  for (let o = 0; o + UP_TILE < size; o += step) offs.push(o);
+  offs.push(size - UP_TILE);
+  return offs;
+}
 function upProgress(text, pct) { upl.textContent = text; upp.textContent = pct + '%'; upf.style.width = pct + '%'; }
 function showUpError(msg) { ueb.style.display = 'block'; ueb.textContent = msg; }
 </script>
