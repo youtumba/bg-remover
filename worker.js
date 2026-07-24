@@ -41,6 +41,22 @@ let assetsUrl = null;  // chosen working assets mirror (kept for the session)
 let tjsMod = null;     // cached Transformers.js module (shared by RMBG and upscaling)
 let rmbg = null;       // cached { RawImage, model, processor }
 const upCache = {};    // cached upscaling pipelines by model id
+let gpuChecked = null; // cached real WebGPU adapter availability (avoids noisy "No available adapters" logs)
+
+// navigator.gpu can exist while no adapter is actually available (headless /
+// software-only environments). Probing once avoids onnxruntime logging
+// "No available adapters." on every run when we blindly request device:'gpu'.
+async function hasGpuAdapter() {
+  if (gpuChecked !== null) return gpuChecked;
+  gpuChecked = false;
+  try {
+    if (self.navigator && self.navigator.gpu) {
+      const adapter = await self.navigator.gpu.requestAdapter();
+      gpuChecked = !!adapter;
+    }
+  } catch (_) { gpuChecked = false; }
+  return gpuChecked;
+}
 
 function fail(code, message, info) {
   const err = new Error(message || code);
@@ -82,6 +98,10 @@ async function loadTJS() {
       const mod = await import(url);
       if (!mod.AutoModel || !mod.AutoProcessor || !mod.RawImage || !mod.pipeline) throw new Error('broken CDN build');
       mod.env.allowLocalModels = false;
+      // GitHub Pages does not send the COOP/COEP headers required for WASM
+      // multi-threading (crossOriginIsolated). Pinning to 1 thread up front
+      // skips the failed multi-thread attempt and its console warning.
+      mod.env.backends.onnx.wasm.numThreads = 1;
       // Serve the ONNX WASM engine from the same mirror as the library itself
       if (url.includes('jsdelivr')) mod.env.backends.onnx.wasm.wasmPaths = url + '/dist/';
       tjsMod = mod;
@@ -103,8 +123,8 @@ async function runImgly(file, model, report) {
     // 'isnet' (full) | 'isnet_fp16' (medium) | 'isnet_quint8' (compact).
     // Each model is downloaded once and cached by the browser.
     model,
-    // WebGPU when available — noticeably faster than WASM/CPU
-    device: (self.navigator && self.navigator.gpu ? 'gpu' : 'cpu'),
+    // WebGPU when a real adapter is available — noticeably faster than WASM/CPU
+    device: (await hasGpuAdapter()) ? 'gpu' : 'cpu',
     publicPath,
     progress(key, current, total) {
       if (!total) return;
