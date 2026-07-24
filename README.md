@@ -1,74 +1,64 @@
-# ✂️ BG Remover
+# BG Remover ✂️
 
-Бесплатный инструмент для удаления фона с фотографий и увеличения картинок (апскейла). Работает прямо в браузере — без регистрации, без водяных знаков и без загрузки ваших фото на какие-либо серверы.
+**A free online tool for removing image backgrounds and AI upscaling — right in the browser.**
 
-## Как пользоваться
+Live: **https://youtumba.github.io/bg-remover/**
 
-1. Откройте сайт.
-2. Выберите вкладку: ✂️ удаление фона или 🔍 апскейл (увеличение картинки).
-3. Перетащите фото на страницу, нажмите «Выбрать файл» или просто вставьте картинку из буфера обмена (Ctrl+V).
-4. Подождите — нейросеть сделает всё сама.
-5. Сравните результат «до / после» и скачайте готовую картинку.
+Open the page, drop in an image, and download the result with a transparent background as PNG or WEBP. The Upscale tab enlarges images ×2 or ×4 while a neural network reconstructs the details. The interface is in English by default; Russian is available via the language switcher in the top-right corner.
 
-Поддерживаются форматы PNG, JPG, WEBP и AVIF, размер файла — до 30 МБ.
+## How to use
 
-## Выбор модели
+1. Open the page.
+2. Pick a tab: **Background removal** or **Upscale ×2 / ×4**.
+3. Choose a model in the dropdown (the default works well for most cases).
+4. Drag & drop an image, paste it from the clipboard (Ctrl+V), or click to browse.
+5. Wait for processing to finish and download the result.
 
-На вкладке удаления фона есть выпадающий список с четырьмя режимами работы:
+## Choosing a model (Background removal)
 
-| Модель | Размер загрузки | Кому подойдёт |
-| --- | --- | --- |
-| ⚡ Лёгкая | ~42 МБ | Медленный интернет и простые фото |
-| 💎 Средняя | ~84 МБ | Баланс скорости загрузки и качества |
-| 🧠 Умная | ~170 МБ | Максимум качества на фото: волосы, мех, мелкие детали |
-| 🎮 RMBG | ~44 МБ | Рендеры, персонажи игр (Roblox и т.п.), аниме и арты |
+| Model | Size | Best for |
+|---|---|---|
+| **RMBG 1.4** (default) | ~44 MB | Renders, game art, anime, graphics — the universal choice |
+| ISNet Compact | ~42 MB | Slow connections: fastest download, basic quality |
+| ISNet Balanced | ~84 MB | Middle ground between download size and quality |
+| ISNet Full | ~170 MB | Best quality for real photos |
 
-Первые три режима — это одна нейросеть, обученная на фотографиях. Режим 🎮 RMBG — отдельная нейросеть, которая заметно лучше справляется с игровой графикой и рисованными картинками, поэтому он включён по умолчанию.
+## Upscale tab
 
-Ваш выбор сохраняется — при следующем визите ничего настраивать не нужно.
+| Mode | Best for |
+|---|---|
+| Swin2SR ×2 | Renders, art, screenshots |
+| Swin2SR ×4 | Renders, art, screenshots |
+| Swin2SR ×4 Real-world | Photos, noisy or compressed images |
 
-## Вкладка «Апскейл»
+- The upscaling model (~50 MB) is downloaded once and cached by the browser.
+- Large images are automatically split into overlapping tiles, upscaled piece by piece and stitched back together seamlessly. Input limits: ~4 MP for ×2 (around 2500×1600) and ~2.3 MP for ×4 (Full HD 1920×1080 fits).
+- Processing runs on the device itself; large images can take several minutes.
 
-Вторая вкладка увеличивает картинку в 2 или 4 раза: нейросеть Swin2SR дорисовывает детали, а не просто растягивает пиксели.
+## Why the first run takes longer
 
-| Режим | Кому подойдёт |
-| --- | --- |
-| ✨ ×2 | Рендеры, арты, скриншоты — аккуратное увеличение вдвое |
-| 🚀 ×4 | То же самое, но в 4 раза |
-| 📷 ×4 фото | Реальные фотографии, шумные и пережатые картинки |
+The neural network (42–170 MB depending on the model) is downloaded on first use and cached by the browser, so subsequent runs start much faster. All heavy work happens in a background worker — the page stays responsive while the model is thinking.
 
-Важно знать:
+## Privacy
 
-- Модель весит ~50 МБ и скачивается один раз, дальше берётся из кеша.
-- Большие картинки автоматически режутся на фрагменты, апскейлятся по частям и сшиваются без швов. Лимит на входе: ~4 МП для ×2 (примерно 2500×1600) и ~2,3 МП для ×4 (Full HD 1920×1080 влезает).
-- Чем крупнее картинка, тем дольше расчёт — вплоть до нескольких минут.
+- Images are **never uploaded to any server** — all processing happens locally in the browser.
+- No sign-up and no personal data required.
+- Safe to use with personal or work images.
 
-## Почему первый запуск дольше обычного
+## FAQ
 
-При первом использовании браузер скачивает модель нейросети (42–170 МБ в зависимости от выбранного режима; модель апскейла — ~50 МБ). Это происходит только один раз: дальше модель берётся из кеша, и обработка запускается практически мгновенно даже при медленном интернете.
+**Is it free?**
+Yes, completely free.
 
-## Приватность
+**Does the quality suffer?**
+Background removal keeps the original resolution — only the background is replaced with transparency. Upscaling increases the resolution ×2 or ×4.
 
-Вся обработка происходит локально на вашем устройстве:
+**Nothing happens after selecting an image?**
+An internet connection is required on first use to download the model. Reload the page and try again.
 
-- Фотографии **не загружаются ни на какие серверы** и не покидают ваш браузер
-- Сайт не требует регистрации и не собирает личные данные
-- Можно спокойно обрабатывать личные и рабочие фото
-
-## Частые вопросы
-
-**Это бесплатно?**
-Да, полностью. Без лимитов, подписок и водяных знаков.
-
-**Какое качество на выходе?**
-Разрешение исходного фото сохраняется, фон становится прозрачным.
-
-**Почему ничего не происходит?**
-Для первого запуска нужно интернет-соединение, чтобы скачать модель. Если загрузка оборвалась — просто попробуйте ещё раз.
-
-**На телефоне работает?**
-Да, в любом современном мобильном браузере. На слабых устройствах обработка может занять чуть больше времени.
+**Does it work on a phone?**
+Yes, in modern mobile browsers. Large images may take a while.
 
 ---
 
-Сделано на базе открытых библиотек [@imgly/background-removal](https://github.com/imgly/background-removal-js), [RMBG-1.4](https://huggingface.co/briaai/RMBG-1.4) и [Swin2SR](https://github.com/mv-lab/swin2sr).
+Built with the open-source libraries [@imgly/background-removal](https://github.com/imgly/background-removal-js), [RMBG-1.4](https://huggingface.co/briaai/RMBG-1.4) and [Swin2SR](https://github.com/mv-lab/swin2sr).
